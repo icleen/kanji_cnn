@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import argparse
 import sys
-import prep_kanji_dataset as prep
+import h5py
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import numpy as np
@@ -19,6 +19,14 @@ def onehot_labels(list, classes):
     for i, item in enumerate(list):
         out[i][int(item)] = 1
     return out
+
+def get_training_data():
+    with h5py.File('training_data','r') as hf:
+        training = np.array(hf.get('training'))
+        t_labels = np.array(hf.get('t_labels'))
+        validation = np.array(hf.get('validation'))
+        v_labels = np.array(hf.get('v_labels'))
+    return training, t_labels, validation, v_labels
 
 # setting up the cnn
 def weight_variable(shape, nme):
@@ -41,11 +49,11 @@ def main(_):
     width, height = 32, 32
     classes = 1721
     batch_size = 50
-    steps = 1000
+    steps = 10000
     save_location = "/tmp/cnn_kanji_dataset_simple2"
 
     # Import data
-    training, t_labels, validation, v_labels = prep.get_training_data()
+    training, t_labels, validation, v_labels = get_training_data()
     t_labels = onehot_labels(t_labels, classes)
     v_labels = onehot_labels(v_labels, classes)
 
