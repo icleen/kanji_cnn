@@ -9,9 +9,8 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import numpy as np
 
-from tensorflow.examples.tutorials.mnist import input_data
-
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 
 FLAGS = None
 
@@ -29,6 +28,10 @@ def get_training_data():
         validation = np.array(hf.get('validation'))
         v_labels = np.array(hf.get('v_labels'))
     return training, t_labels, validation, v_labels
+
+# setting up the debug filter
+def has_inf_or_nan(datum, tensor):
+    return np.any(np.isnan(tensor)) or np.any(np.isinf(tensor))
 
 # setting up the cnn
 def weight_variable(shape, nme):
@@ -51,8 +54,8 @@ def main(_):
     width, height = 32, 32
     size = (width, height)
     classes = 1721
-    batch_size = 50
-    steps = 10000
+    batch_size = 100
+    steps = 5000
     save_location = "/tmp/cnn_kanji_dataset"
 
     # Import data
@@ -148,6 +151,8 @@ def main(_):
     saver = tf.train.Saver()
 
     sess = tf.InteractiveSession()
+    # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+    # sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
     sess.run(tf.global_variables_initializer())
     if os.path.exists(os.path.join(save_location)):
         saver.restore(sess, save_location + "/model.ckpt")
@@ -155,19 +160,22 @@ def main(_):
     # Test trained model
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    epoch = -1
     # Train
     for i in range(steps):
         a = i*batch_size % len(training)
         batchx = training[a:a + batch_size]
         batchy = t_labels[a:a + batch_size]
-        batchy = onehot_labels(batchy, classes)
+        # batchy = onehot_labels(batchy, classes)
         train_step.run(feed_dict={x: batchx, y_: batchy, keep_prob: 0.5})
         if i%100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
                 x:batchx, y_: batchy, keep_prob: 1.0})
             print("step %d, training accuracy %g"%(i, train_accuracy))
-            print("test accuracy %g"%accuracy.eval(feed_dict={
-                x: validation, y_: v_labels, keep_prob: 1.0}))
+        if a == 0:
+            epoch += 1
+            print("epoch %d, test accuracy %g"%(epoch, accuracy.eval(feed_dict={
+                x: validation, y_: v_labels, keep_prob: 1.0})))
             save_path = saver.save(sess, save_location + "/model.ckpt")
 
     print("test accuracy %g"%accuracy.eval(feed_dict={

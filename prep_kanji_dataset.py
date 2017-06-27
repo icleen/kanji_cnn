@@ -31,6 +31,7 @@ def get_data(file_list, label_y_dict, size):
         y.append(label_y_dict[y_k])
     # y = np.array(y,dtype='uint8').reshape((len(y),1))
     x = np.reshape(x, (len(file_list), size[0] * size[1]))
+    x /= 255.0
     return x,y
 
 def get_files_list(image_path):
@@ -69,6 +70,24 @@ def get_training_data():
         validation = np.array(hf.get('validation'))
         v_labels = np.array(hf.get('v_labels'))
     return training, t_labels, validation, v_labels
+
+
+def make_json():
+    file_path = 'kanji_dataset/characters/'
+    file_list = []
+    folder_list = []
+    for subdir, dirs, files in os.walk(image_path):
+        folder_list.append(subdir)
+        for file in files:
+            file_path = os.path.join(subdir,file)
+            file_list.append(file_path)
+
+    dictionary = make_dictionary(folder_list)
+    labels = []
+    label = {}
+    for file in file_list:
+        gt = os.path.basename(file).split('_')[0]
+        label = {"gt": dictionary[gt], "image_path": file}
 
 if __name__ == '__main__':
     file_path = 'kanji_dataset/characters/'
