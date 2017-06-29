@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import argparse
 import sys
-import h5py
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import numpy as np
@@ -45,16 +44,16 @@ def max_pool_2x2(x):
 
 def main(_):
     # Hyper-parameters
-    width, height = 64, 64
+    width, height = 32, 32
     size = (width, height)
     classes = 1721
-    batch_size = 30
-    steps = 1000
-    save_location = "/tmp/cnn_hiragana_kanji3"
+    batch_size = 50
+    steps = 10000
+    learn_rate = 0.0001
+    save_location = "/tmp/cnn_kanji_dataset"
 
     # Import data
-
-    training, t_labels, validation, v_labels = prep.data_from_base('training_data_64')
+    training, t_labels, validation, v_labels = prep.data_from_base('training_data')
     t_labels = onehot_labels(t_labels, classes)
     v_labels = onehot_labels(v_labels, classes)
 
@@ -62,28 +61,23 @@ def main(_):
 
     # Create the model
     x = tf.placeholder(tf.float32, [None, width * height])
-    W = tf.Variable(tf.zeros([width * height, classes]))
-    b = tf.Variable(tf.zeros([classes]))
-    y = tf.matmul(x, W) + b
+    x_image = tf.reshape(x, [-1,width,height,1])
 
     # Define loss and optimizer
     y_ = tf.placeholder(tf.float32, [None, classes])
-
-    # redefine the input
-    x_image = tf.reshape(x, [-1,width,height,1])
 
     # adding the first convolutional layer
     W_conv1 = weight_variable([5, 5, 1, 32], "w1")
     b_conv1 = bias_variable([32], "b1")
     h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
 
-    # adding the first convolutional layer
+    # adding the second convolutional layer
     W_conv2 = weight_variable([5, 5, 32, 32], "w2")
     b_conv2 = bias_variable([32], "b2")
     h_conv2 = tf.nn.relu(conv2d(h_conv1, W_conv2) + b_conv2)
 
     # adding the first pooling layer
-    h_pool1 = max_pool_2x2(h_conv1)
+    h_pool1 = max_pool_2x2(h_conv2)
 
     # adding the third convolutional layer
     W_conv3 = weight_variable([5, 5, 32, 64], "w3")
@@ -101,16 +95,16 @@ def main(_):
     # adding the fifth convolutional layer
     W_conv5 = weight_variable([5, 5, 64, 64], "w5")
     b_conv5 = bias_variable([64], "b5")
-    h_conv5 = tf.nn.relu(conv2d(h_pool2, W_conv4) + b_conv4)
+    h_conv5 = tf.nn.relu(conv2d(h_pool2, W_conv5) + b_conv5)
 
-    # the third pooling layer
+    # the second pooling layer
     h_pool3 = max_pool_2x2(h_conv5)
 
     #adding the final layer
-    W_fc1 = weight_variable([8 * 8 * 64, 1024], "W_fc1")
+    W_fc1 = weight_variable([4 * 4 * 64, 1024], "W_fc1")
     b_fc1 = bias_variable([1024], "b_fc1")
 
-    h_pool3_flat = tf.reshape(h_pool3, [-1, 8 * 8 * 64])
+    h_pool3_flat = tf.reshape(h_pool3, [-1, 4 * 4 * 64])
     h_fc1 = tf.nn.relu(tf.matmul(h_pool3_flat, W_fc1) + b_fc1)
 
     # adding the dropout
@@ -140,13 +134,12 @@ def main(_):
     cross_entropy = tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_conv))
 
-    train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    train_step = tf.train.AdamOptimizer(learn_rate).minimize(cross_entropy)
 
     # Add ops to save and restore all the variables.
     saver = tf.train.Saver()
 
     sess = tf.InteractiveSession()
-    # sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
     # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
     # sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
     sess.run(tf.global_variables_initializer())
@@ -157,6 +150,7 @@ def main(_):
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     epoch = -1
+    test_batch = 500
     # Train
     for i in range(steps):
         a = i*batch_size % len(training)
@@ -170,11 +164,29 @@ def main(_):
             save_path = saver.save(sess, save_location + "/model.ckpt")
         if a < batch_size:
             epoch += 1
-            print("epoch %d, test accuracy %g"%(epoch, accuracy.eval(feed_dict={
-                x: validation, y_: v_labels, keep_prob: 1.0})))
+            acc = 0.0
+            length = int(len(validation) / test_batch)
+            for i in range(length):
+                a = i*test_batch
+                acc += accuracy.eval(feed_dict={
+                    x: validation[a:a + test_batch],
+                    y_: v_labels[a:a + test_batch],
+                    keep_prob: 1.0})
+            acc /= length
+            print("epoch %d, test accuracy %g"%(epoch, acc))
 
-    print("test accuracy %g"%accuracy.eval(feed_dict={
-        x: validation, y_: v_labels, keep_prob: 1.0}))
+    acc = 0.0
+    length = int(len(validation) / test_batch)
+    for i in range(length):
+        a = i*test_batch
+        acc += accuracy.eval(feed_dict={
+            x: validation[a:a + test_batch],
+            y_: v_labels[a:a + test_batch],
+            keep_prob: 1.0})
+    acc /= length
+    print("test accuracy %g"%acc)
+    # print("test accuracy %g"%accuracy.eval(feed_dict={
+    #     x: validation, y_: v_labels, keep_prob: 1.0}))
     save_path = saver.save(sess, save_location + "/model.ckpt")
 
 if __name__ == '__main__':

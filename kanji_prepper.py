@@ -35,24 +35,37 @@ def make_json():
         labels.append({"gt": dictionary[gt], "image_path": file})
 
     number_of_examples = len(file_list)
-    train_cnt = int(number_of_examples * 0.9)
+    print(number_of_examples)
+    train_cnt = int(number_of_examples * 0.8)
+    print(train_cnt)
     val_cnt = number_of_examples - train_cnt
+    print(val_cnt)
+    test_cnt = int(val_cnt * 0.5)
+    print(test_cnt)
+    test_cnt += train_cnt
+    print(test_cnt)
 
     with open("training.json", 'w') as f:
         json.dump(labels[:train_cnt], f)
 
     with open("validation.json", 'w') as f:
-        json.dump(labels[train_cnt:], f)
+        json.dump(labels[train_cnt:test_cnt], f)
+
+    with open("test.json", 'w') as f:
+        json.dump(labels[test_cnt:], f)
 
 def data_to_base():
     size = (64, 64)
     training, t_labels = get_data_json('training.json', size)
     validation, v_labels = get_data_json('validation.json', size)
-    with h5py.File('training_data_64', 'w') as hf:
+    test, test_labels = get_data_json('test.json', size)
+    with h5py.File('train_val_test_data_64', 'w') as hf:
          hf.create_dataset('training', data = training[:])
          hf.create_dataset('t_labels', data = t_labels[:])
          hf.create_dataset('validation', data = validation[:])
          hf.create_dataset("v_labels", data = v_labels[:])
+         hf.create_dataset('test', data = test[:])
+         hf.create_dataset("test_labels", data = test_labels[:])
 
 def data_from_base(data_file):
     with h5py.File(data_file,'r') as hf:
@@ -61,6 +74,24 @@ def data_from_base(data_file):
         validation = np.array(hf.get('validation'))
         v_labels = np.array(hf.get('v_labels'))
     return training, t_labels, validation, v_labels
+
+def training_from_base(data_file):
+    with h5py.File(data_file,'r') as hf:
+        training = np.array(hf.get('training'))
+        t_labels = np.array(hf.get('t_labels'))
+    return training, t_labels
+
+def validation_from_base(data_file):
+    with h5py.File(data_file,'r') as hf:
+        validation = np.array(hf.get('validation'))
+        v_labels = np.array(hf.get('v_labels'))
+    return validation, v_labels
+
+def test_from_base(data_file):
+    with h5py.File(data_file,'r') as hf:
+        test = np.array(hf.get('test'))
+        test_labels = np.array(hf.get('test_labels'))
+    return test, test_labels
 
 def get_data_json(file_path, size):
     root_path = ''
@@ -87,13 +118,3 @@ if __name__ == '__main__':
     make_json()
     print('to json')
     data_to_base()
-    # print('made json file')
-    # train, t_labels = get_data_json('training.json')
-    # validation, v_labels = get_data_json('validation.json')
-    # print(validation.shape)
-    # print(len(validation))
-    # print(type(validation))
-    # print(validation[0].shape)
-    # print(len(validation[0]))
-    # print(type(validation[0]))
-    # print(validation[0])
